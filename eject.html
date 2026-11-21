@@ -135,20 +135,29 @@
     pointer-events: none;
   }
   .controls { display: grid; justify-items: center; gap: 14px; }
+  /* The headline is SVG text stretched to an exact width, so it always fits on one line. */
   .headline {
+    width: min(100%, calc(var(--hl) * 7.8));
+    margin: 0;
+    line-height: 0;
+    animation: rise 600ms ease both;
+  }
+  .headline svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    filter: drop-shadow(0 4px 0 rgba(18,32,48,0.55)) drop-shadow(0 0 18px rgba(18,32,48,0.4));
+  }
+  .headline text {
     font-family: var(--display);
     font-weight: 700;
-    font-size: var(--hl);
-    line-height: 1;
-    white-space: nowrap;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    text-align: center;
-    text-wrap: nowrap;
-    color: var(--sky-ink);
-    text-shadow: 0 0 2px rgba(18,32,48,0.9), 0 2px 0 rgba(18,32,48,0.85), 0 4px 0 rgba(18,32,48,0.5), 0 0 24px rgba(18,32,48,0.45);
-    margin: 0;
-    animation: rise 600ms ease both;
+    font-size: 128px;
+    fill: var(--sky-ink);
+    stroke: rgba(18,32,48,0.9);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+    paint-order: stroke fill;
   }
   @keyframes rise { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
   #reset {
@@ -172,7 +181,7 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: calc(33.333% - var(--hl) * 0.5);
+    top: calc(33.333% - var(--hl) * 0.58);
     display: grid;
     justify-items: center;
     gap: 18px;
@@ -297,7 +306,7 @@
 </main>
 <div class="overlay">
   <div class="top">
-    <h1 class="headline" id="headline" hidden>veo accepted</h1>
+    <h1 class="headline" id="headline" aria-label="VEO accepted" hidden><svg viewBox="0 0 1000 150" aria-hidden="true"><text x="500" y="120" text-anchor="middle" textLength="990" lengthAdjust="spacingAndGlyphs">VEO ACCEPTED</text></svg></h1>
     <div class="notice" id="notice" hidden>manager notified</div>
   </div>
   <div class="controls">
@@ -943,19 +952,9 @@
     cue(2300, () => play('kaching', { vol: 0.75 }));
     cue(3000, () => play('lamb', { vol: 0.5 }));
     baaTimer = setTimeout(bleats, 9000);
-    setTimeout(() => { headline.hidden = false; fitHeadline(); }, 700);
+    setTimeout(() => { headline.hidden = false; }, 700);
     setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 1500);
   });
-
-  // keep the headline on one line: shrink it if it would overflow the screen
-  function fitHeadline() {
-    if (headline.hidden) return;
-    headline.style.fontSize = '';
-    const avail = headline.parentElement.clientWidth - 32, w = headline.scrollWidth;
-    if (w > avail) headline.style.fontSize = (parseFloat(getComputedStyle(headline).fontSize) * avail / w) + 'px';
-  }
-  window.addEventListener('resize', fitHeadline);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHeadline);
 
   const modal = $('modal'), cancelBtn = $('cancel-rescind'), confirmBtn = $('confirm-rescind');
   function openModal() {
