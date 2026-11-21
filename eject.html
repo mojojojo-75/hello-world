@@ -233,6 +233,7 @@
   let W = 0, H = 0, blades = [], flowers = [], clouds = [], particles = [];
   let meteors = [], cracks = [], shake = 0, lastThud = 0;
   let jail = null, birdTimer = 0, crackleTimer = 0;
+  let happy = null, pastureStart = 0;
 
   // ---------- audio ----------
   let ctx;
@@ -290,6 +291,16 @@
       gn.gain.setValueAtTime(0.001, at); gn.gain.exponentialRampToValueAtTime(0.06, at + 0.015); gn.gain.exponentialRampToValueAtTime(0.001, at + 0.08);
       o.connect(gn).connect(ctx.destination); o.start(at); o.stop(at + 0.09);
     }
+  }
+  function chime() {
+    if (!ctx || state !== 'pasture') return;
+    const t = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
+      const at = t + i * 0.13, o = ctx.createOscillator(), gn = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      gn.gain.setValueAtTime(0.001, at); gn.gain.exponentialRampToValueAtTime(0.14, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.001, at + 1.4);
+      o.connect(gn).connect(ctx.destination); o.start(at); o.stop(at + 1.5);
+    });
   }
   function birds() { if (state !== 'pasture') return; chirp(); birdTimer = setTimeout(birds, 500 + Math.random() * 1300); }
   function crackle() {
@@ -399,6 +410,26 @@
       return pts;
     });
     clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: H * (0.08 + Math.random() * 0.25), s: 0.6 + Math.random() * 0.8, v: 6 + Math.random() * 10 }));
+    buildHappy();
+  }
+  function buildHappy() {
+    const mid = hills[1], front = hills[2];
+    const birdList = Array.from({ length: 7 }, (_, i) => ({ x0: -60 - Math.random() * 200, y: H * (0.14 + Math.random() * 0.28),
+      v: 50 + Math.random() * 50, s: 8 + Math.random() * 8, ph: Math.random() * 6, at: 1400 + i * 350 }));
+    const flies = Array.from({ length: Math.max(6, W / 140 | 0) }, (_, i) => {
+      const x = Math.random() * W, top = hillY(front, x);
+      return { x, y: top + 20 + Math.random() * Math.max(10, H - top - 70), ph: Math.random() * 6,
+        c: ['#ffb3d9', '#ffe066', '#9ad7ff', '#ffffff', '#c9a3ff'][i % 5], at: 1800 + Math.random() * 1500 };
+    });
+    const sheep = [];
+    for (let tries = 0; sheep.length < 3 && tries < 300; tries++) {
+      const x = W * 0.08 + Math.random() * W * 0.84, y = hillY(mid, x);
+      if (y < hillY(front, x) - 26 && sheep.every((s) => Math.abs(s.x - x) > 90))
+        sheep.push({ x, y, dir: Math.random() < 0.5 ? -1 : 1, ph: Math.random() * 6, at: 2200 + sheep.length * 400 });
+    }
+    const bunnies = [0, 1].map((i) => ({ dir: i ? -1 : 1, start: i ? W + 40 : -40, dist: W * (i ? 0.3 : 0.28) + 40,
+      v: 70 + Math.random() * 30, ph: Math.random() * 6, at: 2600 + i * 900, yo: 35 + Math.random() * 40, fur: i ? '#c9a27a' : '#f4efe8' }));
+    happy = { birds: birdList, flies, sheep, bunnies };
   }
 
   function draw(now) {
@@ -437,6 +468,20 @@
       }
     }
 
+    // rainbow
+    const flee = state === 'fire' ? (now - fireStart) / 1000 : 0;
+    const ap = (at) => clamp01((now - pastureStart - at) / 600);
+    const ra = clamp01((now - pastureStart - 1000) / 1800) * (1 - burn);
+    if (ra > 0) {
+      const R = Math.min(W * 0.42, H * 0.5), bw = R * 0.035;
+      g.globalAlpha = ra * 0.5; g.lineCap = 'butt';
+      ['#ff4d4d', '#ff9f40', '#ffe14d', '#5fd35f', '#4da6ff', '#6b5bff', '#b35bff'].forEach((c, i) => {
+        g.strokeStyle = c; g.lineWidth = bw + 1;
+        g.beginPath(); g.arc(W * 0.28, H * 0.66, R - i * bw, Math.PI, 0); g.stroke();
+      });
+      g.globalAlpha = 1;
+    }
+
     // hills
     hills.forEach((h, i) => {
       g.fillStyle = mix(h.green, h.char, clamp01(burn * 1.3 - i * 0.1));
@@ -453,6 +498,13 @@
         g.lineWidth = w; g.strokeStyle = col;
         for (const c of cracks) { g.beginPath(); g.moveTo(c[0][0], c[0][1]); for (const p of c) g.lineTo(p[0], p[1]); g.stroke(); }
       }
+    }
+
+    // grazing sheep
+    const sc = Math.min(W, H) / 650;
+    for (const s of happy.sheep) {
+      const a = ap(s.at);
+      if (a) drawSheep(s.x + s.dir * flee * flee * W * 0.6, s.y + Math.sin(t * 3 + s.ph) * 1.2, s.dir, sc, a, t + s.ph, burn);
     }
 
     // flowers
@@ -480,6 +532,46 @@
       g.lineWidth = 1.2 + (b.h / 50);
       g.beginPath(); g.moveTo(b.x, b.y);
       g.quadraticCurveTo(b.x + bend * 0.4, b.y - len * 0.5, b.x + bend, b.y - len);
+      g.stroke();
+    }
+
+    // hopping bunnies
+    for (const b of happy.bunnies) {
+      const a = ap(b.at);
+      if (!a) continue;
+      const el = (now - pastureStart - b.at) / 1000, run = b.v * el, moving = run < b.dist || flee > 0;
+      const x = b.start + b.dir * (Math.min(run, b.dist) + flee * flee * W * 0.9);
+      const hopT = flee ? t * 9 : t * 5 + b.ph;
+      const hop = moving ? -Math.abs(Math.sin(hopT)) * 16 * sc : (Math.sin(t * 1.3 + b.ph) > 0.92 ? -6 * sc : 0);
+      drawBunny(x, hillY(hills[2], Math.max(0, Math.min(W, x))) + b.yo + hop, b.dir, sc, a, b.fur);
+    }
+
+    // butterflies
+    for (const b of happy.flies) {
+      const a = ap(b.at) * (1 - clamp01(burn * 1.6));
+      if (a <= 0) continue;
+      const x = b.x + Math.sin(t * 0.6 + b.ph) * 50, y = b.y + Math.sin(t * 1.4 + b.ph) * 20 - flee * flee * H * 0.4;
+      const fl = Math.abs(Math.sin(t * 14 + b.ph)), ws = 6 * sc;
+      g.globalAlpha = a; g.fillStyle = b.c;
+      g.beginPath(); g.ellipse(x - ws * 0.8 * fl, y, ws * fl + 0.5, ws * 0.8, -0.4, 0, 6.28); g.fill();
+      g.beginPath(); g.ellipse(x + ws * 0.8 * fl, y, ws * fl + 0.5, ws * 0.8, 0.4, 0, 6.28); g.fill();
+      g.fillStyle = '#3a2b22'; g.fillRect(x - 0.8, y - ws * 0.6, 1.6, ws * 1.2);
+      g.globalAlpha = 1;
+    }
+
+    // birds
+    g.lineCap = 'round'; g.strokeStyle = '#2c3a46';
+    for (const b of happy.birds) {
+      const el = (now - pastureStart - b.at) / 1000;
+      if (el < 0) continue;
+      let x = ((b.x0 + 260 + b.v * el) % (W + 320)) - 260 + flee * flee * W * 0.3;
+      const y = b.y + Math.sin(t * 1.1 + b.ph) * 6 - flee * flee * H * 0.7;
+      const fl = Math.sin(t * (flee ? 16 : 8) + b.ph), s = b.s * sc;
+      g.lineWidth = Math.max(1.6, 2.2 * sc);
+      g.beginPath();
+      g.moveTo(x - s, y - fl * s * 0.6);
+      g.quadraticCurveTo(x - s * 0.4, y - s * 0.45, x, y);
+      g.quadraticCurveTo(x + s * 0.4, y - s * 0.45, x + s, y - fl * s * 0.6);
       g.stroke();
     }
 
@@ -562,6 +654,34 @@
     g.restore();
 
     raf = requestAnimationFrame(draw);
+  }
+
+  // ---------- happy critters ----------
+  function drawSheep(x, y, dir, sc, a, tt, burn) {
+    g.save(); g.translate(x, y); g.scale(dir * sc, sc); g.globalAlpha = a;
+    g.fillStyle = '#1d1a18';
+    for (const lx of [-12, -5, 5, 12]) g.fillRect(lx - 1.5, -8, 3, 10);
+    g.fillStyle = mix([250, 250, 246], [90, 84, 80], burn);
+    for (const [cx, cy, r] of [[-12, -18, 9], [-4, -22, 10], [6, -21, 10], [13, -17, 8], [0, -14, 10], [-8, -12, 8], [9, -12, 8]]) {
+      g.beginPath(); g.arc(cx, cy, r, 0, 6.28); g.fill();
+    }
+    const graze = Math.sin(tt * 0.8) > 0.2 ? 7 : 0;
+    g.fillStyle = '#1d1a18';
+    g.beginPath(); g.ellipse(21, -19 + graze, 6, 8, 0.5, 0, 6.28); g.fill();
+    g.beginPath(); g.ellipse(17, -25 + graze, 4, 2, -0.5, 0, 6.28); g.fill();
+    g.restore();
+  }
+  function drawBunny(x, y, dir, sc, a, fur) {
+    g.save(); g.translate(x, y); g.scale(dir * sc, sc); g.globalAlpha = a;
+    g.fillStyle = fur;
+    g.beginPath(); g.ellipse(0, -10, 12, 8, 0, 0, 6.28); g.fill();
+    g.beginPath(); g.arc(10, -17, 6, 0, 6.28); g.fill();
+    g.beginPath(); g.ellipse(8, -28, 2.4, 8, -0.15, 0, 6.28); g.fill();
+    g.beginPath(); g.ellipse(12.5, -27, 2.4, 8, 0.25, 0, 6.28); g.fill();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(-12, -11, 4, 0, 6.28); g.fill();
+    g.fillStyle = '#ffb3c6'; g.beginPath(); g.arc(15.5, -16, 1.4, 0, 6.28); g.fill();
+    g.fillStyle = '#1d1a18'; g.beginPath(); g.arc(12, -18.5, 1.3, 0, 6.28); g.fill();
+    g.restore();
   }
 
   // ---------- the jailer ----------
@@ -673,7 +793,7 @@
       r: 2 + Math.random() * 5 * scale, life: 0, max: 0.6 + Math.random() * 1.0, seed: Math.random() * 6, grav: -0.03 });
   }
 
-  function startScene() { build(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); canvas.classList.add('on'); }
+  function startScene() { pastureStart = performance.now(); build(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); canvas.classList.add('on'); }
   function stopScene() { cancelAnimationFrame(raf); raf = 0; particles = []; meteors = []; shake = 0; jail = null; clearTimeout(birdTimer); clearTimeout(crackleTimer); g.clearRect(0, 0, W, H); }
   window.addEventListener('resize', () => { if (state !== 'off') build(); });
 
@@ -689,6 +809,7 @@
     if (navigator.vibrate) { try { navigator.vibrate([80, 40, 200]); } catch (e) {} }
     setTimeout(startScene, 250);
     birdTimer = setTimeout(birds, 1000);
+    setTimeout(chime, 1300);
     setTimeout(() => { headline.hidden = false; }, 700);
     setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 1500);
   });
