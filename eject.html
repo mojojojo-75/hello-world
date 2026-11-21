@@ -232,6 +232,7 @@
   let fireStart = 0, raf = 0;
   let W = 0, H = 0, blades = [], flowers = [], clouds = [], particles = [];
   let meteors = [], cracks = [], shake = 0, lastThud = 0;
+  let jail = null, birdTimer = 0, crackleTimer = 0;
 
   // ---------- audio ----------
   let ctx;
@@ -273,6 +274,81 @@
     rg.gain.setValueAtTime(0.6, t + 3.8);
     rg.gain.exponentialRampToValueAtTime(0.001, t + 5.2);
     o.connect(lp).connect(rg).connect(ctx.destination); o.start(t); o.stop(t + 5.3);
+  }
+  function tick(at, vol, freq) {
+    const n = noise(0.025), bp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 4; ng.gain.value = vol;
+    n.connect(bp).connect(ng).connect(ctx.destination); n.start(at);
+  }
+  function chirp() {
+    if (!ctx) return;
+    const t = ctx.currentTime, pips = 2 + (Math.random() * 3 | 0), base = 2600 + Math.random() * 1400;
+    for (let i = 0; i < pips; i++) {
+      const at = t + i * 0.11, o = ctx.createOscillator(), gn = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(base, at); o.frequency.exponentialRampToValueAtTime(base * 1.5, at + 0.06);
+      gn.gain.setValueAtTime(0.001, at); gn.gain.exponentialRampToValueAtTime(0.06, at + 0.015); gn.gain.exponentialRampToValueAtTime(0.001, at + 0.08);
+      o.connect(gn).connect(ctx.destination); o.start(at); o.stop(at + 0.09);
+    }
+  }
+  function birds() { if (state !== 'pasture') return; chirp(); birdTimer = setTimeout(birds, 500 + Math.random() * 1300); }
+  function crackle() {
+    if (state !== 'fire' || !ctx) return;
+    const t = ctx.currentTime;
+    for (let i = 0; i < 3; i++) if (Math.random() < 0.7) tick(t + Math.random() * 0.08, 0.1 + Math.random() * 0.35, 700 + Math.random() * 2300);
+    crackleTimer = setTimeout(crackle, 90);
+  }
+  function grind() {
+    if (!ctx) return;
+    const t = ctx.currentTime, n = noise(1.8), lp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(80, t); lp.frequency.exponentialRampToValueAtTime(500, t + 1.3);
+    ng.gain.setValueAtTime(0.001, t); ng.gain.exponentialRampToValueAtTime(0.9, t + 0.8); ng.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+    n.connect(lp).connect(ng).connect(ctx.destination); n.start(t);
+    const o = ctx.createOscillator(), olp = ctx.createBiquadFilter(), og = ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(38, t); o.frequency.linearRampToValueAtTime(62, t + 1.3);
+    olp.type = 'lowpass'; olp.frequency.value = 200;
+    og.gain.setValueAtTime(0.001, t); og.gain.exponentialRampToValueAtTime(0.5, t + 0.9); og.gain.exponentialRampToValueAtTime(0.001, t + 1.9);
+    o.connect(olp).connect(og).connect(ctx.destination); o.start(t); o.stop(t + 2);
+  }
+  function laugh() {
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    for (let i = 0; i < 5; i++) {
+      const t = t0 + i * 0.24, f = 118 - i * 7, o = ctx.createOscillator(), gn = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 1.08, t); o.frequency.exponentialRampToValueAtTime(f * 0.9, t + 0.18);
+      gn.gain.setValueAtTime(0.001, t); gn.gain.exponentialRampToValueAtTime(2.5, t + 0.03); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      for (const [fq, q] of [[650, 5], [1100, 6]]) {
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fq; bp.Q.value = q;
+        o.connect(bp).connect(gn);
+      }
+      gn.connect(ctx.destination); o.start(t); o.stop(t + 0.22);
+    }
+  }
+  function clank(big) {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [523, 1247, 2131, 3389].forEach((f, i) => {
+      const o = ctx.createOscillator(), gn = ctx.createGain();
+      o.frequency.value = f * (0.92 + Math.random() * 0.16);
+      gn.gain.setValueAtTime(0.22 / (i + 1) * (big ? 1.4 : 1), t);
+      gn.gain.exponentialRampToValueAtTime(0.001, t + 0.9 - i * 0.15);
+      o.connect(gn).connect(ctx.destination); o.start(t); o.stop(t + 1);
+    });
+    const n = noise(0.12), hp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    hp.type = 'highpass'; hp.frequency.value = 1200; ng.gain.value = 0.7;
+    n.connect(hp).connect(ng).connect(ctx.destination); n.start(t);
+    lastThud = 0; thud();
+    for (let i = 0; i < 9; i++) tick(t + 0.08 + i * 0.045 + Math.random() * 0.02, 0.3 * (1 - i / 9), 2500 + Math.random() * 2500);
+  }
+  function lockClick() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    tick(t, 0.9, 3200); tick(t + 0.09, 1, 2400);
+    const o = ctx.createOscillator(), gn = ctx.createGain();
+    o.frequency.value = 2600;
+    gn.gain.setValueAtTime(0.15, t + 0.09); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    o.connect(gn).connect(ctx.destination); o.start(t + 0.09); o.stop(t + 0.5);
   }
   function thud() {
     if (!ctx || performance.now() - lastThud < 140) return;
@@ -449,6 +525,8 @@
       }
     }
 
+    drawJailer(now, t);
+
     // particles
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
@@ -480,9 +558,110 @@
       v.addColorStop(1, `rgba(90,0,0,${0.6 * burn * flicker})`);
       g.fillStyle = v; g.fillRect(-40, -40, W + 80, H + 80);
     }
+    drawScreenChains(now);
     g.restore();
 
     raf = requestAnimationFrame(draw);
+  }
+
+  // ---------- the jailer ----------
+  const easeOutBack = (s) => 1 + 2.70158 * Math.pow(s - 1, 3) + 1.70158 * Math.pow(s - 1, 2);
+  function easeOutBounce(x) {
+    const n = 7.5625, d = 2.75;
+    if (x < 1 / d) return n * x * x;
+    if (x < 2 / d) return n * (x -= 1.5 / d) * x + 0.75;
+    if (x < 2.5 / d) return n * (x -= 2.25 / d) * x + 0.9375;
+    return n * (x -= 2.625 / d) * x + 0.984375;
+  }
+  function drawChain(x1, y1, x2, y2, L, th) {
+    const dx = x2 - x1, dy = y2 - y1, a = Math.atan2(dy, dx), n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (L * 0.8)));
+    for (let i = 0; i <= n; i++) {
+      g.save();
+      g.translate(x1 + dx * i / n, y1 + dy * i / n); g.rotate(a);
+      const ry = i % 2 ? th * 0.45 : L * 0.3;
+      for (const [w, c, oy] of [[th * 1.7, '#141516', 0], [th, '#878e94', 0], [th * 0.3, '#dfe4e7', -th * 0.25]]) {
+        g.lineWidth = w; g.strokeStyle = c;
+        g.beginPath(); g.ellipse(0, oy, L * 0.55, ry, 0, 0, 6.28); g.stroke();
+      }
+      g.restore();
+    }
+  }
+  function drawJailer(now, t) {
+    if (!jail || now < jail.riseAt) return;
+    const r = clamp01((now - jail.riseAt) / 1300), e = 1 - Math.pow(1 - r, 3);
+    const S = Math.min(H * 0.62, W * 0.85);
+    const bob = r >= 1 && !reduced ? Math.sin(t * 2.2) * S * 0.008 : 0;
+    const baseY = H + 6 + (1 - e) * S * 1.05 + bob;
+    const rim = `rgba(255,120,30,${0.7 + Math.random() * 0.3})`, dark = '#0c0707';
+    g.save();
+    g.translate(W / 2, baseY); g.scale(S, S);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    // arms reaching out
+    for (const sgn of [-1, 1]) {
+      for (const [w, c] of [[0.075 + 6 / S, rim], [0.075, dark]]) {
+        g.lineWidth = w; g.strokeStyle = c;
+        g.beginPath(); g.moveTo(sgn * 0.17, -0.57); g.quadraticCurveTo(sgn * 0.34, -0.55, sgn * 0.37, -0.4); g.stroke();
+      }
+      g.fillStyle = dark; g.beginPath(); g.arc(sgn * 0.37, -0.4, 0.04, 0, 6.28); g.fill();
+    }
+    // robe
+    g.fillStyle = dark; g.strokeStyle = rim; g.lineWidth = 3 / S;
+    g.beginPath();
+    g.moveTo(-0.3, 0.02); g.lineTo(-0.2, -0.6); g.quadraticCurveTo(0, -0.66, 0.2, -0.6); g.lineTo(0.3, 0.02); g.closePath();
+    g.fill(); g.stroke();
+    // belt and key ring
+    g.beginPath(); g.moveTo(-0.24, -0.3); g.lineTo(0.24, -0.3); g.stroke();
+    g.lineWidth = 4 / S; g.beginPath(); g.arc(0.12, -0.25, 0.035, 0, 6.28); g.stroke();
+    // hood
+    g.lineWidth = 3 / S;
+    g.beginPath();
+    g.moveTo(-0.16, -0.58);
+    g.quadraticCurveTo(-0.15, -0.82, 0, -0.93);
+    g.quadraticCurveTo(0.15, -0.82, 0.16, -0.58);
+    g.quadraticCurveTo(0, -0.62, -0.16, -0.58);
+    g.fill(); g.stroke();
+    g.fillStyle = '#000'; g.beginPath(); g.ellipse(0, -0.72, 0.075, 0.085, 0, 0, 6.28); g.fill();
+    // burning eyes
+    g.shadowColor = '#ff2a10'; g.shadowBlur = 18; g.fillStyle = '#ff3a18';
+    for (const sgn of [-1, 1]) { g.beginPath(); g.ellipse(sgn * 0.032, -0.735, 0.019, 0.008, sgn * 0.25, 0, 6.28); g.fill(); }
+    g.restore();
+    // chains dangling from his fists until he throws them
+    if (now < jail.chains[0]) {
+      const sw = reduced ? 0 : Math.sin(t * 2.4) * S * 0.05;
+      for (const sgn of [-1, 1]) {
+        const hx = W / 2 + sgn * 0.37 * S, hy = baseY - 0.4 * S;
+        drawChain(hx, hy, hx + sw * sgn, hy + 0.34 * S, S * 0.04, S * 0.012);
+      }
+    }
+  }
+  function drawScreenChains(now) {
+    if (!jail) return;
+    const L = Math.min(W, H) * 0.075, th = L * 0.22, M = Math.max(W, H);
+    const lines = [[-0.1 * W, -0.1 * H, 1.1 * W, 1.1 * H], [1.1 * W, -0.1 * H, -0.1 * W, 1.1 * H], [-0.1 * W, 0.5 * H, 1.1 * W, 0.5 * H]];
+    jail.chains.forEach((st, i) => {
+      if (now < st) return;
+      const e = easeOutBack(clamp01((now - st) / 220));
+      const [x1, y1, x2, y2] = lines[i], a = Math.atan2(y2 - y1, x2 - x1);
+      const off = (1 - e) * M * 0.9 * (i % 2 ? 1 : -1), nx = -Math.sin(a) * off, ny = Math.cos(a) * off;
+      drawChain(x1 + nx, y1 + ny, x2 + nx, y2 + ny, L, th);
+    });
+    if (now < jail.lockAt) return;
+    const P = Math.min(W, H) * 0.12, cx = W / 2;
+    const y = -P * 2 + (H / 2 + P * 0.2 + P * 2) * easeOutBounce(clamp01((now - jail.lockAt) / 450));
+    g.lineCap = 'butt';
+    for (const [w, c] of [[P * 0.26, '#141516'], [P * 0.18, '#7c8389']]) {
+      g.lineWidth = w; g.strokeStyle = c;
+      g.beginPath(); g.arc(cx, y - P * 0.5, P * 0.5, Math.PI, 0); g.lineTo(cx + P * 0.5, y - P * 0.3); g.moveTo(cx - P * 0.5, y - P * 0.5); g.lineTo(cx - P * 0.5, y - P * 0.3); g.stroke();
+    }
+    const body = g.createLinearGradient(0, y - P * 0.45, 0, y + P * 0.85);
+    body.addColorStop(0, '#5a5f64'); body.addColorStop(1, '#202326');
+    g.fillStyle = body; g.strokeStyle = '#0d0e0f'; g.lineWidth = P * 0.06;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(cx - P * 0.8, y - P * 0.45, P * 1.6, P * 1.3, P * 0.18); else g.rect(cx - P * 0.8, y - P * 0.45, P * 1.6, P * 1.3);
+    g.fill(); g.stroke();
+    g.fillStyle = '#050505';
+    g.beginPath(); g.arc(cx, y + P * 0.1, P * 0.13, 0, 6.28); g.fill();
+    g.beginPath(); g.moveTo(cx - P * 0.07, y + P * 0.12); g.lineTo(cx + P * 0.07, y + P * 0.12); g.lineTo(cx + P * 0.1, y + P * 0.5); g.lineTo(cx - P * 0.1, y + P * 0.5); g.closePath(); g.fill();
   }
   function ember(x, y) {
     if (particles.length > 1700) return;
@@ -495,7 +674,7 @@
   }
 
   function startScene() { build(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); canvas.classList.add('on'); }
-  function stopScene() { cancelAnimationFrame(raf); raf = 0; particles = []; meteors = []; shake = 0; g.clearRect(0, 0, W, H); }
+  function stopScene() { cancelAnimationFrame(raf); raf = 0; particles = []; meteors = []; shake = 0; jail = null; clearTimeout(birdTimer); clearTimeout(crackleTimer); g.clearRect(0, 0, W, H); }
   window.addEventListener('resize', () => { if (state !== 'off') build(); });
 
   // ---------- flow ----------
@@ -509,6 +688,7 @@
     boom();
     if (navigator.vibrate) { try { navigator.vibrate([80, 40, 200]); } catch (e) {} }
     setTimeout(startScene, 250);
+    birdTimer = setTimeout(birds, 1000);
     setTimeout(() => { headline.hidden = false; }, 700);
     setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 1500);
   });
@@ -521,6 +701,12 @@
     notice.hidden = true;
     headline.hidden = true;
     whoosh();
+    crackle();
+    jail = { riseAt: fireStart + 3000, chains: [fireStart + 5000, fireStart + 5450, fireStart + 5900], lockAt: fireStart + 6500 };
+    setTimeout(grind, 3000);
+    setTimeout(laugh, 4300);
+    jail.chains.forEach((c, i) => setTimeout(() => { clank(i === 2); shake = Math.min(34, shake + 26); }, c - fireStart + 140));
+    setTimeout(() => { lockClick(); shake = Math.min(34, shake + 14); }, 6500 + 170);
     setTimeout(() => {
       canvas.classList.remove('on');
       document.body.classList.remove('ejected');
@@ -529,6 +715,6 @@
       status.textContent = 'ARMED · SEAT 1';
       btn.focus();
       setTimeout(() => { stopScene(); state = 'off'; }, 1250);
-    }, 5200);
+    }, 7900);
   });
 </script>
