@@ -138,8 +138,9 @@
   .headline {
     font-family: var(--display);
     font-weight: 700;
-    font-size: clamp(36px, 9vw, 84px);
+    font-size: var(--hl);
     line-height: 1;
+    white-space: nowrap;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     text-align: center;
@@ -165,7 +166,20 @@
   }
   #reset:hover { border-color: var(--hazard); color: var(--hazard); }
   #reset:focus-visible { outline: 2px solid var(--hazard); outline-offset: 3px; }
-  .top { display: grid; justify-items: center; gap: 16px; }
+  /* headline centred on the one-third line, sized to the viewport so it never wraps */
+  .top {
+    --hl: min(11vw, 20vh, 180px);
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(33.333% - var(--hl) * 0.5);
+    display: grid;
+    justify-items: center;
+    gap: 18px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .controls { margin-top: auto; }
   .notice {
     display: inline-flex;
     align-items: center;
@@ -353,13 +367,14 @@
     }));
     return samplesReady;
   }
-  function play(name, { vol = 1, rate = 1, loop = false, fadeIn = 0 } = {}) {
+  function play(name, { vol = 1, rate = 1, loop = false, fadeIn = 0, send = null } = {}) {
     const b = sampleBuf[name];
     if (!b || !ctx) return null;
     const src = ctx.createBufferSource(), gn = ctx.createGain(), t = ctx.currentTime;
     src.buffer = b; src.loop = loop; src.playbackRate.value = rate;
     if (fadeIn) { gn.gain.setValueAtTime(0.001, t); gn.gain.exponentialRampToValueAtTime(vol, t + fadeIn); } else gn.gain.value = vol;
     src.connect(gn).connect(master); src.start(t);
+    if (send) gn.connect(send);
     return { src, gn };
   }
   function fadeOut(node, secs) {
@@ -443,6 +458,37 @@
     gn.gain.setValueAtTime(0.15, t + 0.09); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
     o.connect(gn).connect(master); o.start(t + 0.09); o.stop(t + 0.5);
   }
+  // the padlock: a huge iron slam in a stone room
+  function hallIR(sec) {
+    const len = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+    return b;
+  }
+  function lockSlam() {
+    if (!ctx) return;
+    const t = ctx.currentTime, verb = ctx.createConvolver(), wet = ctx.createGain();
+    verb.buffer = hallIR(2.4); wet.gain.value = 0.55;
+    verb.connect(wet).connect(master);
+    play('slam', { vol: 1, rate: 0.6, send: verb });
+    play('slam', { vol: 0.7, rate: 0.95 });
+    play('boom', { vol: 1, rate: 0.5, send: verb });
+    // sub-bass body hit
+    const o = ctx.createOscillator(), g1 = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(28, t + 0.8);
+    g1.gain.setValueAtTime(1.5, t); g1.gain.exponentialRampToValueAtTime(0.001, t + 1);
+    o.connect(g1).connect(master); o.start(t); o.stop(t + 1.05);
+    // heavy iron ring: low inharmonic partials with a long decay
+    [168, 389, 712, 1143, 1667].forEach((f, i) => {
+      const p = ctx.createOscillator(), pg = ctx.createGain();
+      p.type = i ? 'sine' : 'triangle'; p.frequency.value = f * (0.97 + Math.random() * 0.06);
+      pg.gain.setValueAtTime(0.32 / (i + 1), t); pg.gain.exponentialRampToValueAtTime(0.001, t + 1.8 - i * 0.22);
+      p.connect(pg); pg.connect(master); pg.connect(verb); p.start(t); p.stop(t + 1.9);
+    });
+    // the crack of metal on metal
+    const n = noise(0.18), lp = ctx.createBiquadFilter(), ng = ctx.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 2600; ng.gain.value = 1.1;
+    n.connect(lp).connect(ng); ng.connect(master); ng.connect(verb); n.start(t);
+  }
   function thud() {
     if (!ctx || performance.now() - lastThud < 140) return;
     lastThud = performance.now();
@@ -492,7 +538,7 @@
       for (let s = 0; s < 8; s++) { x += (Math.random() - 0.3) * 40; y += (Math.random() - 0.5) * 18; pts.push([x, y]); }
       return pts;
     });
-    clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: H * (0.3 + Math.random() * 0.14), s: 0.6 + Math.random() * 0.8, v: 6 + Math.random() * 10 }));
+    clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: H * (0.05 + Math.random() * 0.13), s: 0.6 + Math.random() * 0.8, v: 6 + Math.random() * 10 }));
     buildHappy();
   }
   function buildHappy() {
@@ -540,7 +586,7 @@
 
     // sun
     g.fillStyle = mix([255, 244, 196], [255, 140, 60], burn);
-    g.beginPath(); g.arc(W * 0.84, H * 0.34, Math.min(W, H) * 0.05, 0, 6.28); g.fill();
+    g.beginPath(); g.arc(W * 0.86, H * 0.13, Math.min(W, H) * 0.05, 0, 6.28); g.fill();
 
     // clouds (turn to smoke)
     g.fillStyle = burn ? `rgba(${mix([255,255,255],[50,40,40],burn).slice(4,-1)},0.85)` : 'rgba(255,255,255,0.9)';
@@ -938,7 +984,7 @@
       clank(i === 2); play('slam', { vol: 0.55, rate: 1.25 + i * 0.08 });
       shake = Math.min(34, shake + 26);
     }, c - fireStart + 140));
-    setTimeout(() => { lockClick(); play('slam', { vol: 1, rate: 0.9 }); shake = Math.min(34, shake + 14); }, 6500 + 170);
+    setTimeout(() => { lockClick(); lockSlam(); shake = Math.min(44, shake + 40); }, 6500 + 170);
     setTimeout(() => {
       canvas.classList.remove('on');
       fadeOut(fireNode, 1.2); fireNode = null;
