@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-  /* Layout: one centered cockpit panel; hazard-striped bezel around a single red mushroom button. Single dark look by choice. */
+  /* Layout: one centered cockpit panel with a single red button; after ejecting, a full-screen pasture canvas replaces it, with the headline pinned top and controls pinned bottom. Single dark look by choice. */
   :root {
     --panel: #1c1f22;
     --panel-edge: #2b2f33;
@@ -13,6 +13,8 @@
     --red: #d7261e;
     --red-deep: #8e1410;
     --flash: #ff5a3c;
+    --sky-ink: #ffffff;
+    --shade: rgba(16, 20, 18, 0.72);
     --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     color-scheme: dark;
@@ -29,16 +31,32 @@
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     padding-block: 24px;
     box-sizing: border-box;
-    overflow-x: hidden;
+    overflow: hidden;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
+
+  #scene {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 1200ms ease;
+    pointer-events: none;
+  }
+  #scene.on { opacity: 1; }
+
   .stage {
+    position: relative;
+    z-index: 1;
     display: grid;
     justify-items: center;
     gap: clamp(20px, 4vh, 36px);
     width: 100%;
   }
+  .label, .status { transition: opacity 400ms ease; }
   .label {
     font-weight: 700;
     letter-spacing: 0.35em;
@@ -48,7 +66,7 @@
     padding-left: 0.35em;
   }
   .bezel {
-    --size: min(72vw, 48vh, 420px);
+    --size: min(72vw, 58vh, 420px);
     width: var(--size);
     aspect-ratio: 1;
     max-width: 100%;
@@ -58,6 +76,7 @@
     background: repeating-linear-gradient(45deg, var(--hazard) 0 22px, #111 22px 44px);
     box-shadow: 0 0 0 6px var(--panel-edge), 0 24px 60px rgba(0,0,0,0.6);
     display: grid;
+    transition: opacity 900ms ease 150ms, transform 900ms ease 150ms;
   }
   .well {
     border-radius: 50%;
@@ -88,7 +107,6 @@
   }
   #eject:focus-visible { outline: 4px solid var(--hazard); outline-offset: 8px; }
   #eject:disabled { cursor: default; }
-
   .status {
     font-family: var(--mono);
     font-size: clamp(12px, 2vw, 14px);
@@ -97,21 +115,25 @@
     min-height: 1.4em;
     text-align: center;
   }
-  .status b { color: var(--flash); font-weight: 500; }
-  #reset {
-    font: 500 13px var(--mono);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--ink);
-    background: transparent;
-    border: 1px solid var(--dim);
-    border-radius: 4px;
-    padding: 10px 18px;
-    cursor: pointer;
-  }
-  #reset:hover { border-color: var(--hazard); color: var(--hazard); }
-  #reset:focus-visible { outline: 2px solid var(--hazard); outline-offset: 3px; }
 
+  body.ejected .bezel { opacity: 0; transform: scale(0.6); pointer-events: none; }
+  body.ejected .label, body.ejected .status { opacity: 0; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: calc(env(safe-area-inset-top, 0px) + clamp(28px, 7vh, 64px));
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(28px, 6vh, 56px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    pointer-events: none;
+  }
+  .controls { display: grid; justify-items: center; gap: 14px; }
   .headline {
     font-family: var(--display);
     font-weight: 700;
@@ -121,28 +143,50 @@
     text-transform: uppercase;
     text-align: center;
     text-wrap: balance;
-    color: var(--hazard);
+    color: var(--sky-ink);
+    text-shadow: 0 3px 0 rgba(0,0,0,0.25), 0 8px 30px rgba(0,0,0,0.35);
     margin: 0;
+    animation: rise 600ms ease both;
   }
+  @keyframes rise { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+  #reset {
+    pointer-events: auto;
+    font: 500 14px var(--mono);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--sky-ink);
+    background: var(--shade);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 4px;
+    padding: 12px 22px;
+    cursor: pointer;
+    animation: rise 500ms ease both;
+  }
+  #reset:hover { border-color: var(--hazard); color: var(--hazard); }
+  #reset:focus-visible { outline: 2px solid var(--hazard); outline-offset: 3px; }
   .notice {
     font-family: var(--mono);
     font-size: clamp(13px, 2.2vw, 16px);
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--ink);
+    color: var(--sky-ink);
+    background: var(--shade);
+    border-radius: 3px;
+    padding: 6px 10px;
     text-align: center;
+    animation: rise 500ms ease 150ms both;
   }
 
   .flash {
     position: fixed;
     inset: 0;
+    z-index: 3;
     background: var(--flash);
     opacity: 0;
     pointer-events: none;
   }
   body.ejected .flash { animation: flash 700ms ease-out; }
   body.ejected .stage { animation: shake 500ms cubic-bezier(.36,.07,.19,.97); }
-  body.ejected .label { color: var(--flash); }
   @keyframes flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
   @keyframes shake {
     10%, 90% { transform: translate(-2px, 1px); }
@@ -153,13 +197,13 @@
   @media (prefers-reduced-motion: reduce) {
     body.ejected .stage { animation: none; }
     body.ejected .flash { animation-duration: 1ms; }
-    #eject { transition: none; }
+    #eject, .bezel { transition: none; }
+    .headline, #reset, .notice { animation: none; }
   }
 </style>
 
-<div class="flash" aria-hidden="true"></div>
+<canvas id="scene" aria-hidden="true"></canvas>
 <main class="stage">
-  <h1 class="headline" id="headline" hidden>veo accepted</h1>
   <div class="label" id="label">Press to eject</div>
   <div class="bezel">
     <div class="well">
@@ -167,71 +211,223 @@
     </div>
   </div>
   <div class="status" id="status" role="status">ARMED &middot; SEAT 1</div>
-  <button id="reset" type="button" hidden>Rescind</button>
-  <div class="notice" id="notice" hidden>manager notified</div>
 </main>
+<div class="overlay">
+  <h1 class="headline" id="headline" hidden>veo accepted</h1>
+  <div class="controls">
+    <button id="reset" type="button" hidden>Rescind</button>
+    <div class="notice" id="notice" hidden>manager notified</div>
+  </div>
+</div>
+<div class="flash" aria-hidden="true"></div>
 
 <script>
-  const btn = document.getElementById('eject');
-  const reset = document.getElementById('reset');
-  const status = document.getElementById('status');
-  const label = document.getElementById('label');
-  const headline = document.getElementById('headline');
-  const notice = document.getElementById('notice');
-  let ctx;
+  const $ = (id) => document.getElementById(id);
+  const btn = $('eject'), reset = $('reset'), status = $('status');
+  const headline = $('headline'), notice = $('notice');
+  const canvas = $('scene'), g = canvas.getContext('2d');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  let state = 'off';          // off | pasture | fire
+  let fireStart = 0, raf = 0;
+  let W = 0, H = 0, blades = [], flowers = [], clouds = [], particles = [];
+
+  // ---------- audio ----------
+  let ctx;
+  function audio() { try { return ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  function noise(seconds) {
+    const len = ctx.sampleRate * seconds, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource(); src.buffer = buf; return src;
+  }
   function boom() {
-    try {
-      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-      const t = ctx.currentTime;
-      // low thump
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(140, t);
-      osc.frequency.exponentialRampToValueAtTime(35, t + 0.5);
-      g.gain.setValueAtTime(0.9, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-      osc.connect(g).connect(ctx.destination);
-      osc.start(t); osc.stop(t + 0.6);
-      // rocket hiss
-      const len = ctx.sampleRate * 1.2;
-      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-      const src = ctx.createBufferSource();
-      const f = ctx.createBiquadFilter();
-      const ng = ctx.createGain();
-      src.buffer = buf;
-      f.type = 'bandpass'; f.frequency.value = 900;
-      ng.gain.value = 0.5;
-      src.connect(f).connect(ng).connect(ctx.destination);
-      src.start(t + 0.05);
-    } catch (e) { /* no audio, no problem */ }
+    if (!audio()) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gn = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(35, t + 0.5);
+    gn.gain.setValueAtTime(0.9, t);
+    gn.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    osc.connect(gn).connect(ctx.destination); osc.start(t); osc.stop(t + 0.6);
+    const src = noise(1.2), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+    f.type = 'bandpass'; f.frequency.value = 900; ng.gain.value = 0.5;
+    src.connect(f).connect(ng).connect(ctx.destination); src.start(t + 0.05);
+  }
+  function whoosh() {
+    if (!audio()) return;
+    const t = ctx.currentTime, src = noise(2.8), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(300, t);
+    f.frequency.exponentialRampToValueAtTime(2400, t + 1.2);
+    ng.gain.setValueAtTime(0.001, t);
+    ng.gain.exponentialRampToValueAtTime(0.7, t + 0.6);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 2.8);
+    src.connect(f).connect(ng).connect(ctx.destination); src.start(t);
   }
 
+  // ---------- scene ----------
+  const hills = [
+    { base: 0.58, amp: 0.05, freq: 1.6, off: 0.3, green: [124, 178, 92], char: [70, 52, 40] },
+    { base: 0.66, amp: 0.045, freq: 2.3, off: 2.1, green: [96, 160, 70], char: [52, 38, 30] },
+    { base: 0.76, amp: 0.035, freq: 1.2, off: 4.0, green: [74, 140, 54], char: [36, 27, 22] },
+  ];
+  const hillY = (h, x) => H * (h.base + h.amp * Math.sin((x / W) * Math.PI * h.freq + h.off));
+  const mix = (a, b, t) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(',')})`;
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+  function build() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const front = hills[2];
+    blades = [];
+    const n = Math.min(1600, Math.floor(W * 1.4));
+    for (let i = 0; i < n; i++) {
+      const x = Math.random() * W;
+      const top = hillY(front, x);
+      const y = top + Math.pow(Math.random(), 0.7) * (H - top + 10);
+      const depth = (y - top) / (H - top + 1);
+      blades.push({ x, y, h: 10 + depth * 34 + Math.random() * 10, phase: Math.random() * 6.28, shade: Math.random() });
+    }
+    blades.sort((a, b) => a.y - b.y);
+    flowers = Array.from({ length: Math.floor(W / 25) }, () => {
+      const x = Math.random() * W, top = hillY(front, x);
+      return { x, y: top + Math.random() * (H - top), c: Math.random() < 0.5 ? '#fff7e0' : '#f6d64a' };
+    });
+    clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: H * (0.08 + Math.random() * 0.25), s: 0.6 + Math.random() * 0.8, v: 6 + Math.random() * 10 }));
+  }
+
+  function draw(now) {
+    const t = now / 1000;
+    const burn = state === 'fire' ? clamp01((now - fireStart) / 2200) : 0;
+    const cx = W / 2, cy = H, maxR = Math.hypot(W / 2, H) * 1.05;
+    const radius = burn * maxR, band = 70;
+
+    // sky
+    const sky = g.createLinearGradient(0, 0, 0, H * 0.7);
+    sky.addColorStop(0, mix([110, 175, 232], [60, 22, 18], burn));
+    sky.addColorStop(1, mix([206, 232, 246], [214, 96, 34], burn));
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+
+    // sun
+    g.fillStyle = mix([255, 244, 196], [255, 140, 60], burn);
+    g.beginPath(); g.arc(W * 0.84, H * 0.34, Math.min(W, H) * 0.05, 0, 6.28); g.fill();
+
+    // clouds (turn to smoke)
+    g.fillStyle = burn ? `rgba(${mix([255,255,255],[50,40,40],burn).slice(4,-1)},0.85)` : 'rgba(255,255,255,0.9)';
+    for (const c of clouds) {
+      const x = ((c.x + t * c.v) % (W + 200)) - 100;
+      for (const [dx, dy, r] of [[0, 0, 26], [24, -10, 22], [48, 0, 24], [22, 8, 22]]) {
+        g.beginPath(); g.arc(x + dx * c.s, c.y + dy * c.s, r * c.s, 0, 6.28); g.fill();
+      }
+    }
+
+    // hills
+    hills.forEach((h, i) => {
+      g.fillStyle = mix(h.green, h.char, clamp01(burn * 1.3 - i * 0.1));
+      g.beginPath(); g.moveTo(0, H);
+      for (let x = 0; x <= W; x += 8) g.lineTo(x, hillY(h, x));
+      g.lineTo(W, H); g.closePath(); g.fill();
+    });
+
+    // flowers
+    for (const f of flowers) {
+      if (state === 'fire' && Math.hypot(f.x - cx, f.y - cy) < radius) continue;
+      g.fillStyle = f.c; g.beginPath(); g.arc(f.x, f.y, 2.2, 0, 6.28); g.fill();
+    }
+
+    // grass
+    g.lineCap = 'round';
+    const sway = reduced ? 0 : 1;
+    for (const b of blades) {
+      let len = b.h, color;
+      const d = state === 'fire' ? Math.hypot(b.x - cx, b.y - cy) : Infinity;
+      if (d < radius - band) { len = b.h * 0.25; color = '#1a1412'; }
+      else if (d < radius) {
+        color = Math.random() < 0.5 ? '#ffb02e' : '#ff5a1f';
+        if (particles.length < 700 && Math.random() < 0.25) spawn(b.x, b.y - b.h * 0.6, 1);
+      } else {
+        const l = 34 + b.shade * 18;
+        color = `hsl(${100 + b.shade * 20}, 52%, ${l}%)`;
+      }
+      const bend = sway * Math.sin(t * 1.6 + b.phase + b.x * 0.01) * len * 0.18;
+      g.strokeStyle = color;
+      g.lineWidth = 1.2 + (b.h / 50);
+      g.beginPath(); g.moveTo(b.x, b.y);
+      g.quadraticCurveTo(b.x + bend * 0.4, b.y - len * 0.5, b.x + bend, b.y - len);
+      g.stroke();
+    }
+
+    // lingering flames on burnt ground
+    if (state === 'fire') {
+      const k = reduced ? 3 : 7;
+      for (let i = 0; i < k && particles.length < 700; i++) {
+        const b = blades[(Math.random() * blades.length) | 0];
+        if (Math.hypot(b.x - cx, b.y - cy) < radius) spawn(b.x, b.y, 1.2);
+      }
+    }
+
+    // particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life += 1 / 60; p.x += p.vx; p.y += p.vy; p.vy -= 0.03; p.vx += Math.sin(p.life * 6 + p.seed) * 0.05;
+      const k = p.life / p.max;
+      if (k >= 1) { particles.splice(i, 1); continue; }
+      const col = k < 0.25 ? [255, 220, 90] : k < 0.5 ? [255, 130, 30] : k < 0.7 ? [220, 50, 20] : [60, 55, 55];
+      g.globalCompositeOperation = k < 0.7 ? 'lighter' : 'source-over';
+      g.fillStyle = `rgba(${col.join(',')},${(1 - k) * (k < 0.7 ? 0.7 : 0.45)})`;
+      if (k < 0.7) {
+        const r = p.r * (1 - k * 0.6);
+        g.beginPath(); g.ellipse(p.x, p.y - r, r * 0.55, r * 1.6, 0, 0, 6.28); g.fill();
+      } else {
+        g.beginPath(); g.arc(p.x, p.y, p.r * (1 + k * 2), 0, 6.28); g.fill();
+      }
+    }
+    g.globalCompositeOperation = 'source-over';
+
+    raf = requestAnimationFrame(draw);
+  }
+  function spawn(x, y, scale) {
+    particles.push({ x: x + (Math.random() - 0.5) * 8, y, vx: (Math.random() - 0.5) * 0.6, vy: -1 - Math.random() * 2 * scale,
+      r: 2 + Math.random() * 5 * scale, life: 0, max: 0.6 + Math.random() * 1.0, seed: Math.random() * 6 });
+  }
+
+  function startScene() { build(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); canvas.classList.add('on'); }
+  function stopScene() { cancelAnimationFrame(raf); raf = 0; particles = []; g.clearRect(0, 0, W, H); }
+  window.addEventListener('resize', () => { if (state !== 'off') build(); });
+
+  // ---------- flow ----------
   btn.addEventListener('click', () => {
-    if (document.body.classList.contains('ejected')) return;
+    if (state !== 'off') return;
+    state = 'pasture';
     btn.classList.add('pressed');
     btn.disabled = true;
     document.body.classList.add('ejected');
-    label.textContent = 'Ejected';
-    headline.hidden = false;
-    status.innerHTML = '<b>CANOPY JETTISON &middot; SEAT CLEAR</b>';
+    status.textContent = 'Ejected';
     boom();
     if (navigator.vibrate) { try { navigator.vibrate([80, 40, 200]); } catch (e) {} }
-    setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 900);
+    setTimeout(startScene, 250);
+    setTimeout(() => { headline.hidden = false; }, 700);
+    setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 1500);
   });
 
   reset.addEventListener('click', () => {
-    document.body.classList.remove('ejected');
-    btn.classList.remove('pressed');
-    btn.disabled = false;
+    if (state !== 'pasture') return;
+    state = 'fire';
+    fireStart = performance.now();
     reset.hidden = true;
-    headline.hidden = true;
     notice.hidden = true;
-    label.textContent = 'Press to eject';
-    status.textContent = 'ARMED · SEAT 1';
-    btn.focus();
+    headline.hidden = true;
+    whoosh();
+    setTimeout(() => {
+      canvas.classList.remove('on');
+      document.body.classList.remove('ejected');
+      btn.classList.remove('pressed');
+      btn.disabled = false;
+      status.textContent = 'ARMED · SEAT 1';
+      btn.focus();
+      setTimeout(() => { stopScene(); state = 'off'; }, 1250);
+    }, 3200);
   });
 </script>
