@@ -303,6 +303,10 @@
   let meteors = [], cracks = [], shake = 0, lastThud = 0;
   let jail = null, birdTimer = 0, crackleTimer = 0;
   let happy = null, pastureStart = 0, breezeNode = null, baaTimer = 0;
+  // Beethoven, Symphony No. 6 "Pastoral", I. Allegro ma non troppo (opening).
+  // Public-domain recording via Wikimedia Commons.
+  let musicBuf = null, musicNode = null;
+  const musicReq = fetch('pastoral.mp3').then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
 
   // ---------- audio ----------
   let ctx;
@@ -457,6 +461,29 @@
     gn.gain.setValueAtTime(0.001, ctx.currentTime); gn.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime + 2);
     src.connect(lp).connect(gn).connect(ctx.destination); src.start(); lfo.start();
     breezeNode = { src, lfo, gn };
+  }
+  async function startMusic() {
+    try {
+      if (!musicBuf) {
+        const ab = await musicReq;
+        if (!ab) return;
+        musicBuf = await ctx.decodeAudioData(ab.slice(0));
+      }
+    } catch (e) { return; }
+    if (state !== 'pasture' || musicNode) return;
+    const src = ctx.createBufferSource(), gn = ctx.createGain(), t = ctx.currentTime;
+    src.buffer = musicBuf; src.loop = true;
+    gn.gain.setValueAtTime(0.001, t); gn.gain.exponentialRampToValueAtTime(0.6, t + 2.5);
+    src.connect(gn).connect(ctx.destination); src.start(t);
+    musicNode = { src, gn };
+  }
+  // the record grinds to a halt when the pasture catches fire
+  function tapeStop() {
+    if (!musicNode || !ctx) return;
+    const { src, gn } = musicNode, t = ctx.currentTime;
+    src.playbackRate.setValueAtTime(1, t); src.playbackRate.exponentialRampToValueAtTime(0.2, t + 0.9);
+    gn.gain.cancelScheduledValues(t); gn.gain.setValueAtTime(Math.max(gn.gain.value, 0.001), t); gn.gain.exponentialRampToValueAtTime(0.001, t + 1);
+    src.stop(t + 1.05); musicNode = null;
   }
   function stopBreeze() {
     if (!breezeNode || !ctx) return;
@@ -976,6 +1003,7 @@
     cue(850, chute);
     cue(950, applause);
     cue(1100, breeze);
+    cue(1000, startMusic);
     birdTimer = setTimeout(birds, 1500);
     cue(2200, kaching);
     setTimeout(chime, 2900);
@@ -1013,6 +1041,7 @@
     notice.hidden = true;
     headline.hidden = true;
     stopBreeze();
+    tapeStop();
     clearTimeout(baaTimer);
     whoosh();
     crackle();
