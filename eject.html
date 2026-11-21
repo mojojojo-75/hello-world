@@ -144,7 +144,7 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     text-align: center;
-    text-wrap: balance;
+    text-wrap: nowrap;
     color: var(--sky-ink);
     text-shadow: 0 0 2px rgba(18,32,48,0.9), 0 2px 0 rgba(18,32,48,0.85), 0 4px 0 rgba(18,32,48,0.5), 0 0 24px rgba(18,32,48,0.45);
     margin: 0;
@@ -943,9 +943,19 @@
     cue(2300, () => play('kaching', { vol: 0.75 }));
     cue(3000, () => play('lamb', { vol: 0.5 }));
     baaTimer = setTimeout(bleats, 9000);
-    setTimeout(() => { headline.hidden = false; }, 700);
+    setTimeout(() => { headline.hidden = false; fitHeadline(); }, 700);
     setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 1500);
   });
+
+  // keep the headline on one line: shrink it if it would overflow the screen
+  function fitHeadline() {
+    if (headline.hidden) return;
+    headline.style.fontSize = '';
+    const avail = headline.parentElement.clientWidth - 32, w = headline.scrollWidth;
+    if (w > avail) headline.style.fontSize = (parseFloat(getComputedStyle(headline).fontSize) * avail / w) + 'px';
+  }
+  window.addEventListener('resize', fitHeadline);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHeadline);
 
   const modal = $('modal'), cancelBtn = $('cancel-rescind'), confirmBtn = $('confirm-rescind');
   function openModal() {
