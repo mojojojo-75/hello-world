@@ -29,7 +29,7 @@
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     padding-block: 24px;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow-x: hidden;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
@@ -48,7 +48,7 @@
     padding-left: 0.35em;
   }
   .bezel {
-    --size: min(72vw, 58vh, 420px);
+    --size: min(72vw, 48vh, 420px);
     width: var(--size);
     aspect-ratio: 1;
     max-width: 100%;
@@ -112,6 +112,27 @@
   #reset:hover { border-color: var(--hazard); color: var(--hazard); }
   #reset:focus-visible { outline: 2px solid var(--hazard); outline-offset: 3px; }
 
+  .headline {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(36px, 9vw, 84px);
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: center;
+    text-wrap: balance;
+    color: var(--hazard);
+    margin: 0;
+  }
+  .notice {
+    font-family: var(--mono);
+    font-size: clamp(13px, 2.2vw, 16px);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-align: center;
+  }
+
   .flash {
     position: fixed;
     inset: 0;
@@ -138,6 +159,7 @@
 
 <div class="flash" aria-hidden="true"></div>
 <main class="stage">
+  <h1 class="headline" id="headline" hidden>veo accepted</h1>
   <div class="label" id="label">Pull to eject</div>
   <div class="bezel">
     <div class="well">
@@ -145,7 +167,8 @@
     </div>
   </div>
   <div class="status" id="status" role="status">ARMED &middot; SEAT 1</div>
-  <button id="reset" type="button" hidden>Re-arm</button>
+  <button id="reset" type="button" hidden>Rescind</button>
+  <div class="notice" id="notice" hidden>manager notified</div>
 </main>
 
 <script>
@@ -153,6 +176,8 @@
   const reset = document.getElementById('reset');
   const status = document.getElementById('status');
   const label = document.getElementById('label');
+  const headline = document.getElementById('headline');
+  const notice = document.getElementById('notice');
   let ctx;
 
   function boom() {
@@ -191,10 +216,11 @@
     btn.disabled = true;
     document.body.classList.add('ejected');
     label.textContent = 'Ejected';
+    headline.hidden = false;
     status.innerHTML = '<b>CANOPY JETTISON &middot; SEAT CLEAR</b>';
     boom();
     if (navigator.vibrate) { try { navigator.vibrate([80, 40, 200]); } catch (e) {} }
-    setTimeout(() => { reset.hidden = false; reset.focus(); }, 900);
+    setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 900);
   });
 
   reset.addEventListener('click', () => {
@@ -202,6 +228,8 @@
     btn.classList.remove('pressed');
     btn.disabled = false;
     reset.hidden = true;
+    headline.hidden = true;
+    notice.hidden = true;
     label.textContent = 'Pull to eject';
     status.textContent = 'ARMED · SEAT 1';
     btn.focus();
