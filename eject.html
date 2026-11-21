@@ -19,6 +19,7 @@
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     color-scheme: dark;
   }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     background: radial-gradient(circle at 50% 40%, #24282c 0%, var(--panel) 60%);
@@ -177,6 +178,62 @@
     animation: rise 500ms ease 150ms both;
   }
 
+  .modal-back {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: rgba(8, 10, 9, 0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    animation: fade 180ms ease both;
+  }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    width: min(420px, 100%);
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--panel-edge);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    animation: rise 220ms ease both;
+  }
+  .modal::before {
+    content: "";
+    display: block;
+    height: 10px;
+    background: repeating-linear-gradient(45deg, var(--hazard) 0 12px, #111 12px 24px);
+  }
+  .modal-body { display: grid; gap: 12px; padding: 22px 22px 8px; }
+  .modal h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sky-ink);
+  }
+  .modal p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink); }
+  .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding: 18px 22px 22px; }
+  .modal-actions button {
+    font: 500 13px var(--mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    padding: 11px 16px;
+    cursor: pointer;
+  }
+  #cancel-rescind { background: transparent; color: var(--ink); border: 1px solid var(--dim); }
+  #cancel-rescind:hover { border-color: var(--ink); }
+  #confirm-rescind { background: var(--red); color: #fff; border: 1px solid var(--red-deep); }
+  #confirm-rescind:hover { filter: brightness(1.1); }
+  .modal-actions button:focus-visible { outline: 2px solid var(--hazard); outline-offset: 3px; }
+
   .flash {
     position: fixed;
     inset: 0;
@@ -217,6 +274,18 @@
   <div class="controls">
     <button id="reset" type="button" hidden>Rescind</button>
     <div class="notice" id="notice" hidden>manager notified</div>
+  </div>
+</div>
+<div class="modal-back" id="modal" hidden>
+  <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
+    <div class="modal-body">
+      <h2 id="modal-title">Rescind your VEO?</h2>
+      <p id="modal-desc">Your manager has already been notified. Rescinding cannot be undone, and there may be consequences.</p>
+    </div>
+    <div class="modal-actions">
+      <button id="cancel-rescind" type="button">Keep my VEO</button>
+      <button id="confirm-rescind" type="button">Rescind</button>
+    </div>
   </div>
 </div>
 <div class="flash" aria-hidden="true"></div>
@@ -814,7 +883,26 @@
     setTimeout(() => { reset.hidden = false; notice.hidden = false; reset.focus(); }, 1500);
   });
 
-  reset.addEventListener('click', () => {
+  const modal = $('modal'), cancelBtn = $('cancel-rescind'), confirmBtn = $('confirm-rescind');
+  function openModal() {
+    if (state !== 'pasture') return;
+    modal.hidden = false;
+    cancelBtn.focus();
+  }
+  function closeModal() { modal.hidden = true; if (state === 'pasture') reset.focus(); }
+  reset.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  confirmBtn.addEventListener('click', () => { modal.hidden = true; doRescind(); });
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      (document.activeElement === cancelBtn ? confirmBtn : cancelBtn).focus();
+    }
+  });
+
+  function doRescind() {
     if (state !== 'pasture') return;
     state = 'fire';
     fireStart = performance.now();
@@ -837,5 +925,5 @@
       btn.focus();
       setTimeout(() => { stopScene(); state = 'off'; }, 1250);
     }, 7900);
-  });
+  }
 </script>
