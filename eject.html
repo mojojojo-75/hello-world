@@ -310,7 +310,22 @@
 
   // ---------- audio ----------
   let ctx;
-  function audio() { try { return ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+  // Every sound goes through one master bus: a limiter so overlapping effects never clip.
+  let master;
+  function audio() {
+    try {
+      if (!ctx) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const comp = ctx.createDynamicsCompressor(), out = ctx.createGain();
+        comp.threshold.value = -14; comp.knee.value = 6; comp.ratio.value = 12;
+        comp.attack.value = 0.003; comp.release.value = 0.25;
+        out.gain.value = 0.85;
+        master = ctx.createGain();
+        master.connect(comp).connect(out).connect(ctx.destination);
+      }
+      return ctx;
+    } catch (e) { return null; }
+  }
   function noise(seconds) {
     const len = ctx.sampleRate * seconds, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
@@ -324,10 +339,10 @@
     osc.frequency.exponentialRampToValueAtTime(35, t + 0.5);
     gn.gain.setValueAtTime(0.9, t);
     gn.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-    osc.connect(gn).connect(ctx.destination); osc.start(t); osc.stop(t + 0.6);
+    osc.connect(gn).connect(master); osc.start(t); osc.stop(t + 0.6);
     const src = noise(1.2), f = ctx.createBiquadFilter(), ng = ctx.createGain();
     f.type = 'bandpass'; f.frequency.value = 900; ng.gain.value = 0.5;
-    src.connect(f).connect(ng).connect(ctx.destination); src.start(t + 0.05);
+    src.connect(f).connect(ng).connect(master); src.start(t + 0.05);
   }
   function whoosh() {
     if (!audio()) return;
@@ -338,7 +353,7 @@
     ng.gain.setValueAtTime(0.001, t);
     ng.gain.exponentialRampToValueAtTime(0.7, t + 0.6);
     ng.gain.exponentialRampToValueAtTime(0.001, t + 2.8);
-    src.connect(f).connect(ng).connect(ctx.destination); src.start(t);
+    src.connect(f).connect(ng).connect(master); src.start(t);
     // low hellish rumble
     const o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), rg = ctx.createGain();
     o.type = 'sawtooth'; o.frequency.setValueAtTime(42, t); o.frequency.linearRampToValueAtTime(30, t + 5);
@@ -347,12 +362,12 @@
     rg.gain.exponentialRampToValueAtTime(0.6, t + 0.8);
     rg.gain.setValueAtTime(0.6, t + 3.8);
     rg.gain.exponentialRampToValueAtTime(0.001, t + 5.2);
-    o.connect(lp).connect(rg).connect(ctx.destination); o.start(t); o.stop(t + 5.3);
+    o.connect(lp).connect(rg).connect(master); o.start(t); o.stop(t + 5.3);
   }
   function tick(at, vol, freq) {
     const n = noise(0.025), bp = ctx.createBiquadFilter(), ng = ctx.createGain();
     bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 4; ng.gain.value = vol;
-    n.connect(bp).connect(ng).connect(ctx.destination); n.start(at);
+    n.connect(bp).connect(ng).connect(master); n.start(at);
   }
   function chirp() {
     if (!ctx) return;
@@ -362,7 +377,7 @@
       o.type = 'sine';
       o.frequency.setValueAtTime(base, at); o.frequency.exponentialRampToValueAtTime(base * 1.5, at + 0.06);
       gn.gain.setValueAtTime(0.001, at); gn.gain.exponentialRampToValueAtTime(0.06, at + 0.015); gn.gain.exponentialRampToValueAtTime(0.001, at + 0.08);
-      o.connect(gn).connect(ctx.destination); o.start(at); o.stop(at + 0.09);
+      o.connect(gn).connect(master); o.start(at); o.stop(at + 0.09);
     }
   }
   function chime() {
@@ -372,7 +387,7 @@
       const at = t + i * 0.13, o = ctx.createOscillator(), gn = ctx.createGain();
       o.type = 'triangle'; o.frequency.value = f;
       gn.gain.setValueAtTime(0.001, at); gn.gain.exponentialRampToValueAtTime(0.14, at + 0.02); gn.gain.exponentialRampToValueAtTime(0.001, at + 1.4);
-      o.connect(gn).connect(ctx.destination); o.start(at); o.stop(at + 1.5);
+      o.connect(gn).connect(master); o.start(at); o.stop(at + 1.5);
     });
   }
   // ---------- acceptance SFX ----------
@@ -382,17 +397,17 @@
     o.type = 'sawtooth'; o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.9);
     lp.type = 'lowpass'; lp.frequency.setValueAtTime(400, t); lp.frequency.exponentialRampToValueAtTime(3000, t + 0.9);
     gn.gain.setValueAtTime(0.001, t); gn.gain.exponentialRampToValueAtTime(0.25, t + 0.1); gn.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
-    o.connect(lp).connect(gn).connect(ctx.destination); o.start(t); o.stop(t + 1.2);
+    o.connect(lp).connect(gn).connect(master); o.start(t); o.stop(t + 1.2);
   }
   function chute() {
     const t = ctx.currentTime, n = noise(0.18), lp = ctx.createBiquadFilter(), gn = ctx.createGain();
     lp.type = 'lowpass'; lp.frequency.value = 1400; gn.gain.value = 1.1;
-    n.connect(lp).connect(gn).connect(ctx.destination); n.start(t);
+    n.connect(lp).connect(gn).connect(master); n.start(t);
     const f = noise(0.8), bp = ctx.createBiquadFilter(), fg = ctx.createGain(), lfo = ctx.createOscillator(), depth = ctx.createGain();
     bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 0.8;
     lfo.type = 'square'; lfo.frequency.value = 17; depth.gain.value = 0.25; fg.gain.value = 0.25;
     lfo.connect(depth).connect(fg.gain);
-    f.connect(bp).connect(fg).connect(ctx.destination); f.start(t + 0.12); lfo.start(t + 0.12); lfo.stop(t + 0.95);
+    f.connect(bp).connect(fg).connect(master); f.start(t + 0.12); lfo.start(t + 0.12); lfo.stop(t + 0.95);
   }
   function brass(f, at, dur, vol) {
     const o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), gn = ctx.createGain(), vib = ctx.createOscillator(), vd = ctx.createGain();
@@ -401,7 +416,7 @@
     lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, at); lp.frequency.linearRampToValueAtTime(2600, at + 0.08);
     gn.gain.setValueAtTime(0.001, at); gn.gain.exponentialRampToValueAtTime(vol, at + 0.03);
     gn.gain.setValueAtTime(vol, at + dur - 0.08); gn.gain.exponentialRampToValueAtTime(0.001, at + dur);
-    o.connect(lp).connect(gn).connect(ctx.destination);
+    o.connect(lp).connect(gn).connect(master);
     o.start(at); vib.start(at); o.stop(at + dur + 0.02); vib.stop(at + dur + 0.02);
   }
   function fanfare() {
@@ -414,7 +429,7 @@
     const bed = noise(2.6), bp = ctx.createBiquadFilter(), bg = ctx.createGain();
     bp.type = 'bandpass'; bp.frequency.value = 1000; bp.Q.value = 0.6;
     bg.gain.setValueAtTime(0.001, t); bg.gain.exponentialRampToValueAtTime(0.18, t + 0.3); bg.gain.exponentialRampToValueAtTime(0.001, t + 2.6);
-    bed.connect(bp).connect(bg).connect(ctx.destination); bed.start(t);
+    bed.connect(bp).connect(bg).connect(master); bed.start(t);
     for (let i = 0; i < 140; i++) {
       const at = t + Math.pow(Math.random(), 1.6) * 2.4;
       tick(at, 0.06 + Math.random() * 0.18, 900 + Math.random() * 1800);
@@ -427,7 +442,7 @@
       const o = ctx.createOscillator(), gn = ctx.createGain();
       o.frequency.value = f;
       gn.gain.setValueAtTime(0.09 / (i + 1), t + d); gn.gain.exponentialRampToValueAtTime(0.001, t + d + 1.2);
-      o.connect(gn).connect(ctx.destination); o.start(t + d); o.stop(t + d + 1.25);
+      o.connect(gn).connect(master); o.start(t + d); o.stop(t + d + 1.25);
     }));
   }
   function baa() {
@@ -441,7 +456,7 @@
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fq; bp.Q.value = q;
       o.connect(bp).connect(gn);
     }
-    gn.connect(ctx.destination); o.start(t); lfo.start(t); o.stop(t + 0.7); lfo.stop(t + 0.7);
+    gn.connect(master); o.start(t); lfo.start(t); o.stop(t + 0.7); lfo.stop(t + 0.7);
   }
   function baas() { if (state !== 'pasture') return; baa(); baaTimer = setTimeout(baas, 3500 + Math.random() * 4500); }
   function boing() {
@@ -449,7 +464,7 @@
     o.type = 'sine';
     o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(520, t + 0.12);
     gn.gain.setValueAtTime(0.001, t); gn.gain.exponentialRampToValueAtTime(0.16, t + 0.02); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-    o.connect(gn).connect(ctx.destination); o.start(t); o.stop(t + 0.25);
+    o.connect(gn).connect(master); o.start(t); o.stop(t + 0.25);
   }
   function breeze() {
     const src = ctx.createBufferSource(), len = ctx.sampleRate * 3, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
@@ -459,7 +474,7 @@
     lp.type = 'lowpass'; lp.frequency.value = 500;
     lfo.frequency.value = 0.15; ld.gain.value = 250; lfo.connect(ld).connect(lp.frequency);
     gn.gain.setValueAtTime(0.001, ctx.currentTime); gn.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime + 2);
-    src.connect(lp).connect(gn).connect(ctx.destination); src.start(); lfo.start();
+    src.connect(lp).connect(gn).connect(master); src.start(); lfo.start();
     breezeNode = { src, lfo, gn };
   }
   async function startMusic() {
@@ -474,7 +489,7 @@
     const src = ctx.createBufferSource(), gn = ctx.createGain(), t = ctx.currentTime;
     src.buffer = musicBuf; src.loop = true;
     gn.gain.setValueAtTime(0.001, t); gn.gain.exponentialRampToValueAtTime(0.6, t + 2.5);
-    src.connect(gn).connect(ctx.destination); src.start(t);
+    src.connect(gn).connect(master); src.start(t);
     musicNode = { src, gn };
   }
   // the record grinds to a halt when the pasture catches fire
@@ -504,12 +519,12 @@
     const t = ctx.currentTime, n = noise(1.8), lp = ctx.createBiquadFilter(), ng = ctx.createGain();
     lp.type = 'lowpass'; lp.frequency.setValueAtTime(80, t); lp.frequency.exponentialRampToValueAtTime(500, t + 1.3);
     ng.gain.setValueAtTime(0.001, t); ng.gain.exponentialRampToValueAtTime(0.9, t + 0.8); ng.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
-    n.connect(lp).connect(ng).connect(ctx.destination); n.start(t);
+    n.connect(lp).connect(ng).connect(master); n.start(t);
     const o = ctx.createOscillator(), olp = ctx.createBiquadFilter(), og = ctx.createGain();
     o.type = 'sawtooth'; o.frequency.setValueAtTime(38, t); o.frequency.linearRampToValueAtTime(62, t + 1.3);
     olp.type = 'lowpass'; olp.frequency.value = 200;
     og.gain.setValueAtTime(0.001, t); og.gain.exponentialRampToValueAtTime(0.5, t + 0.9); og.gain.exponentialRampToValueAtTime(0.001, t + 1.9);
-    o.connect(olp).connect(og).connect(ctx.destination); o.start(t); o.stop(t + 2);
+    o.connect(olp).connect(og).connect(master); o.start(t); o.stop(t + 2);
   }
   function laugh() {
     if (!ctx) return;
@@ -523,7 +538,7 @@
         const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fq; bp.Q.value = q;
         o.connect(bp).connect(gn);
       }
-      gn.connect(ctx.destination); o.start(t); o.stop(t + 0.22);
+      gn.connect(master); o.start(t); o.stop(t + 0.22);
     }
   }
   function clank(big) {
@@ -534,11 +549,11 @@
       o.frequency.value = f * (0.92 + Math.random() * 0.16);
       gn.gain.setValueAtTime(0.22 / (i + 1) * (big ? 1.4 : 1), t);
       gn.gain.exponentialRampToValueAtTime(0.001, t + 0.9 - i * 0.15);
-      o.connect(gn).connect(ctx.destination); o.start(t); o.stop(t + 1);
+      o.connect(gn).connect(master); o.start(t); o.stop(t + 1);
     });
     const n = noise(0.12), hp = ctx.createBiquadFilter(), ng = ctx.createGain();
     hp.type = 'highpass'; hp.frequency.value = 1200; ng.gain.value = 0.7;
-    n.connect(hp).connect(ng).connect(ctx.destination); n.start(t);
+    n.connect(hp).connect(ng).connect(master); n.start(t);
     lastThud = 0; thud();
     for (let i = 0; i < 9; i++) tick(t + 0.08 + i * 0.045 + Math.random() * 0.02, 0.3 * (1 - i / 9), 2500 + Math.random() * 2500);
   }
@@ -549,7 +564,7 @@
     const o = ctx.createOscillator(), gn = ctx.createGain();
     o.frequency.value = 2600;
     gn.gain.setValueAtTime(0.15, t + 0.09); gn.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-    o.connect(gn).connect(ctx.destination); o.start(t + 0.09); o.stop(t + 0.5);
+    o.connect(gn).connect(master); o.start(t + 0.09); o.stop(t + 0.5);
   }
   function thud() {
     if (!ctx || performance.now() - lastThud < 140) return;
@@ -560,7 +575,7 @@
     o.frequency.exponentialRampToValueAtTime(30, t + 0.35);
     gn.gain.setValueAtTime(0.5, t);
     gn.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    o.connect(gn).connect(ctx.destination); o.start(t); o.stop(t + 0.4);
+    o.connect(gn).connect(master); o.start(t); o.stop(t + 0.4);
   }
 
   // ---------- scene ----------
